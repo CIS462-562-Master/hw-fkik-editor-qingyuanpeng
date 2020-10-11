@@ -12,7 +12,7 @@
 #include "camera.h"
 #include "shader.h"
 #include "drawable.h"
-
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
 class Viewer
 {
 public:
