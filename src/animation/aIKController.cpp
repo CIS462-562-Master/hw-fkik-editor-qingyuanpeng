@@ -138,22 +138,13 @@ AIKchain IKController::createIKchain(int endJointID, int desiredChainSize, ASkel
 	std::vector<double> weights = std::vector<double>();
 	AJoint* end = pSkeleton->getJointByID(endJointID);
 	AJoint* curr = end;
-	if (desiredChainSize != -1) {
-		for (int i = 0; i < desiredChainSize; i++) {
-			chain.insert(chain.begin(), curr);
-			weights.push_back(0.0);
-			if (curr != nullptr) {
-				curr = curr->getParent;
-			}
-		}
+		while (desiredChainSize!=0 && curr!= nullptr) {
+			chain.push_back(curr);
+			weights.push_back(0.1);
+			desiredChainSize--;
+			curr = curr->getParent();
 	}
-	else {
-		while (curr != nullptr) {
-			chain.insert(chain.begin(), curr);
-			weights.push_back(0.0);
-			curr = curr->getParent;
-		}
-	}
+
 	chainBig.setChain(chain);
 	chainBig.setWeights(weights);
 	return chainBig;
@@ -170,7 +161,7 @@ bool IKController::IKSolver_Limb(int endJointID, const ATarget& target)
 
 	if (!mvalidLimbIKchains || createLimbIKchains())
 	{
-		return false;
+		//return false; //other way around??
 	}
 
 	vec3 desiredRootPosition;
@@ -257,8 +248,42 @@ int IKController::computeLimbIK(ATarget target, AIKchain& IKchain, const vec3 mi
 	// TODO: Implement the analytic/geometric IK method assuming a three joint limb  
 	// The actual position of the end joint should match the target position within some episilon error 
 	// the variable "midJointAxis" contains the rotation axis for the middle joint
-	double rd = sqrt(2 - cos(midJointAxis[0]));
-	double theta1 = asin(sin(midJointAxis[0])/rd);
+
+	AJoint* j1 = IKchain.getJoint(2);
+	AJoint* j2 = IKchain.getJoint(1);
+	AJoint* j3 = IKchain.getJoint(0); //end joint is the first in IKchain
+	vec3 rdv = j3->getGlobalTranslation() - j1->getGlobalTranslation();
+	double rd = rdv.Length();
+	double l1 = Distance(j2->getGlobalTranslation(), j1->getGlobalTranslation());
+	double l2 = Distance(j3->getGlobalTranslation(), j2->getGlobalTranslation());
+
+	double phi = acos((l1*l1 + l2*l2 - rd*rd)/(2.0*l1*l2));
+	double theta1 = asin( l2*sin(phi) / rd);
+	double theta2 = M_PI - phi;
+	
+	vec3 pd = target.getGlobalTranslation();
+	vec3 t = pd - j1->getGlobalTranslation();
+	double temp = Dot(t,rdv);
+	double angle = acos(temp/ (t.Length() * rdv.Length())); //acosf on the outside
+	vec3 axis = rdv.Cross(t) / rdv.Cross(t).Length();
+	mat3 R10 = j1->getGlobalRotation().Transpose();
+	axis = R10 * axis;
+	quat qa = quat();
+	qa.FromAxisAngle(axis, angle);
+
+	quat q1 = quat();
+	q1.FromAxisAngle(axis, theta1);
+	q1 = q1 * qa;
+	mat3 r1 = q1.ToRotation();
+	j1->setLocalRotation(j1->getLocalRotation()*r1);
+
+	quat q2 = quat();
+	q2.FromAxisAngle(midJointAxis, theta2);
+	//mat3 R20 = j2->getGlobalRotation().Transpose();
+	mat3 r2 = q2.ToRotation();
+	j2->setLocalRotation(j2->getLocalRotation() * r2);
+
+	pIKSkeleton->update();
 	return true;
 }
 
@@ -360,33 +385,39 @@ int IKController::computeCCDIK(ATarget target, AIKchain& IKchain, ASkeleton* pIK
 	// TODO: Implement CCD IK  
 	// The actual position of the end joint should match the desiredEndPos within some episilon error 
 
-
-	//Hint:
-	int n = pIKSkeleton->getNumJoints();
-	AJoint* curr = IKchain.getJoint(IKchain.getSize()-1);
+	int n = IKchain.getSize();
+	AJoint* curr = IKchain.getJoint(0);//set curr to end joint
 	vec3 pd = target.getGlobalTranslation();
 	vec3 e = pd - curr->getGlobalTranslation();
-	for (int i = 0; i < n; i++) {
-		curr = pIKSkeleton->getJointByID(i);
-		vec3 pi = curr->getGlobalTranslation();
-		// 1. compute axis and angle for a joint in the IK chain (distal to proximal) in global coordinates
-		vec3 rd = pd - pi;
-		
-		vec3 angle = Distance(pi.Cross(e), vec3(0)) / (pi * pi + pi * e);
-		vec3 axis = (pi * e) / Distance(pi.Cross(e), vec3(0));
-		// 2. once you have the desired axis and angle, convert axis to local joint coords 
-		angle = (curr->getLocalRotation().Transpose()) * angle;
-		axis = (curr->getLocalTranslation()*-1.0) * axis;
-		// 3. compute desired change to local rotation matrix
-		mat3 localRot = curr->getLocalRotation();
-		localRot = localRot * ATransform(angle, axis);
-		// 4. set local rotation matrix to new value
-		curr->setLocalRotation(localRot);
 
+	for (int i = 0; i < 4; i++) {
+		while (curr != nullptr) {
+			vec3 pi = curr->getGlobalTranslation();
+			// 1. compute axis and angle for a joint in the IK chain (distal to proximal) in global coordinates
+			vec3 rd = pd - pi;
 
+			double angle = Distance(pi.Cross(e), vec3(0)) / (pi * pi + pi * e);
+			vec3 axis = (pi * e) / Distance(pi.Cross(e), vec3(0));
+			// 2. once you have the desired axis and angle, convert axis to local joint coords 
+			//angle = (curr->getLocalRotation().Transpose()) * angle;
+			axis = (curr->getLocalTranslation() * -1.0) * axis;
+			// 3. compute desired change to local rotation matrix
+			mat3 localRot = curr->getLocalRotation();
+			quat q;
+			q.FromAxisAngle(axis, angle);
+
+			localRot = localRot * q.ToRotation();
+			// 4. set local rotation matrix to new value
+			curr->setLocalRotation(localRot);
+			// 5. update transforms for joint and all children
+			curr->updateTransform();
+
+			curr = curr->getParent();
+
+		}
+		curr = IKchain.getJoint(0);
 	}
-	// 5. update transforms for joint and all children
-	curr->updateTransform();
+
 	return true;
 }
 
