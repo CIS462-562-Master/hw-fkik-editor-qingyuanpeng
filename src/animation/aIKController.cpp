@@ -386,22 +386,18 @@ int IKController::computeCCDIK(ATarget target, AIKchain& IKchain, ASkeleton* pIK
 	AJoint* end = IKchain.getJoint(0);//set curr to end joint
 	vec3 pd = target.getGlobalTranslation();
 	vec3 e;
+	//AJoint* curr = end;
 	AJoint* curr = end->getParent();
 
 	for (int i = 0; i < 4; i++) {
 		while (curr != nullptr) {
-			e = pd - curr->getGlobalTranslation();
-			if (e.Length() < 0.1) {
+			e = pd - end->getGlobalTranslation();
+			//e = pd - curr->getGlobalTranslation();
+			if (e.Length() < 0.01) {
 				return true;
 			}
 			// 1. compute axis and angle for a joint in the IK chain (distal to proximal) in global coordinates
-			AJoint* parent = curr->getParent();
-			if (parent == nullptr) {
-				curr = nullptr;
-				continue;
-			}
 			vec3 r = end->getGlobalTranslation() - curr->getGlobalTranslation();
-			//vec3 rd = pd - curr->getGlobalTranslation();
 			double angle = (r.Cross(e)).Length() / (Dot(r,r) + Dot(r ,e));
 			vec3 axis = r.Cross(e) / (r.Cross(e)).Length();
 			// 2. once you have the desired axis and angle, convert axis to local joint coords 
@@ -410,15 +406,15 @@ int IKController::computeCCDIK(ATarget target, AIKchain& IKchain, ASkeleton* pIK
 			// 3. compute desired change to local rotation matrix
 			mat3 rot;
 			rot.FromAxisAngle(axis, angle);
-			//mat3 localRot = curr->getLocalRotation() * rot;
+			mat3 localRot = curr->getLocalRotation() * rot;
 			// 4. set local rotation matrix to new value
-			curr->setLocalRotation(rot);
+			curr->setLocalRotation(localRot);
 			// 5. update transforms for joint and all children
 			curr->updateTransform();
-
 			curr = curr->getParent();
 		}
-		curr = IKchain.getJoint(0);
+		
+		curr = end->getParent();
 	}
 
 	return false;
