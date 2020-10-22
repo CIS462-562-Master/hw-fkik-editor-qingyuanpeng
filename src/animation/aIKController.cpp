@@ -138,7 +138,7 @@ AIKchain IKController::createIKchain(int endJointID, int desiredChainSize, ASkel
 	std::vector<double> weights = std::vector<double>();
 	AJoint* end = pSkeleton->getJointByID(endJointID);
 	AJoint* curr = end;
-		while (desiredChainSize!=0 && curr!= nullptr) {
+	while (desiredChainSize!=0 && curr!= nullptr) {
 			chain.push_back(curr);
 			weights.push_back(0.1);
 			desiredChainSize--;
@@ -252,10 +252,10 @@ int IKController::computeLimbIK(ATarget target, AIKchain& IKchain, const vec3 mi
 	AJoint* j1 = IKchain.getJoint(2);
 	AJoint* j2 = IKchain.getJoint(1);
 	AJoint* j3 = IKchain.getJoint(0); //end joint is the first in IKchain
-	vec3 rdv = j3->getGlobalTranslation() - j1->getGlobalTranslation();
+	vec3 rdv = target.getGlobalTranslation() - j1->getGlobalTranslation();
 	double rd = rdv.Length();
 	double l1 = Distance(j2->getGlobalTranslation(), j1->getGlobalTranslation());
-	double l2 = Distance(j3->getGlobalTranslation(), j2->getGlobalTranslation());
+	double l2 = Distance(target.getGlobalTranslation(), j2->getGlobalTranslation());
 
 	double phi = acos((l1*l1 + l2*l2 - rd*rd)/(2.0*l1*l2));
 	double theta1 = asin( l2*sin(phi) / rd);
@@ -263,26 +263,23 @@ int IKController::computeLimbIK(ATarget target, AIKchain& IKchain, const vec3 mi
 	
 	vec3 pd = target.getGlobalTranslation();
 	vec3 t = pd - j1->getGlobalTranslation();
-	double temp = Dot(t,rdv);
-	double angle = acos(temp/ (t.Length() * rdv.Length())); //acosf on the outside
+	
+    rdv = j3->getGlobalTranslation() - j1->getGlobalTranslation();
+	double temp = Dot(t, rdv);
+
+	double angle = acos(temp/ (t.Length() * rdv.Length())); //acos on the outside
 	vec3 axis = rdv.Cross(t) / rdv.Cross(t).Length();
 	mat3 R10 = j1->getGlobalRotation().Transpose();
 	axis = R10 * axis;
-	quat qa = quat();
-	qa.FromAxisAngle(axis, angle);
 
-	quat q1 = quat();
-	q1.FromAxisAngle(axis, theta1);
-	q1 = q1 * qa;
-	mat3 r1 = q1.ToRotation();
-	j1->setLocalRotation(j1->getLocalRotation()*r1);
+	mat3 rotAlpha;
+	rotAlpha.FromAxisAngle(axis, angle);
+	j1->setLocalRotation(j1->getLocalRotation()* rotAlpha);
+	//j1->setLocalRotation(rotAlpha * j1->getLocalRotation());
 
-	quat q2 = quat();
-	q2.FromAxisAngle(midJointAxis, theta2);
-	//mat3 R20 = j2->getGlobalRotation().Transpose();
-	mat3 r2 = q2.ToRotation();
-	j2->setLocalRotation(j2->getLocalRotation() * r2);
-
+	mat3 r2;
+	r2.FromAxisAngle(midJointAxis, theta2);
+	j2->setLocalRotation(r2);
 	pIKSkeleton->update();
 	return true;
 }
@@ -386,39 +383,45 @@ int IKController::computeCCDIK(ATarget target, AIKchain& IKchain, ASkeleton* pIK
 	// The actual position of the end joint should match the desiredEndPos within some episilon error 
 
 	int n = IKchain.getSize();
-	AJoint* curr = IKchain.getJoint(0);//set curr to end joint
+	AJoint* end = IKchain.getJoint(0);//set curr to end joint
 	vec3 pd = target.getGlobalTranslation();
-	vec3 e = pd - curr->getGlobalTranslation();
+	vec3 e;
+	AJoint* curr = end->getParent();
 
 	for (int i = 0; i < 4; i++) {
 		while (curr != nullptr) {
-			vec3 pi = curr->getGlobalTranslation();
+			e = pd - curr->getGlobalTranslation();
+			if (e.Length() < 0.1) {
+				return true;
+			}
 			// 1. compute axis and angle for a joint in the IK chain (distal to proximal) in global coordinates
-			vec3 rd = pd - pi;
-
-			double angle = Distance(pi.Cross(e), vec3(0)) / (pi * pi + pi * e);
-			vec3 axis = (pi * e) / Distance(pi.Cross(e), vec3(0));
+			AJoint* parent = curr->getParent();
+			if (parent == nullptr) {
+				curr = nullptr;
+				continue;
+			}
+			vec3 r = end->getGlobalTranslation() - curr->getGlobalTranslation();
+			//vec3 rd = pd - curr->getGlobalTranslation();
+			double angle = (r.Cross(e)).Length() / (Dot(r,r) + Dot(r ,e));
+			vec3 axis = r.Cross(e) / (r.Cross(e)).Length();
 			// 2. once you have the desired axis and angle, convert axis to local joint coords 
 			//angle = (curr->getLocalRotation().Transpose()) * angle;
-			axis = (curr->getLocalTranslation() * -1.0) * axis;
+			axis = (curr->getGlobalRotation().Transpose()) * axis;
 			// 3. compute desired change to local rotation matrix
-			mat3 localRot = curr->getLocalRotation();
-			quat q;
-			q.FromAxisAngle(axis, angle);
-
-			localRot = localRot * q.ToRotation();
+			mat3 rot;
+			rot.FromAxisAngle(axis, angle);
+			//mat3 localRot = curr->getLocalRotation() * rot;
 			// 4. set local rotation matrix to new value
-			curr->setLocalRotation(localRot);
+			curr->setLocalRotation(rot);
 			// 5. update transforms for joint and all children
 			curr->updateTransform();
 
 			curr = curr->getParent();
-
 		}
 		curr = IKchain.getJoint(0);
 	}
 
-	return true;
+	return false;
 }
 
 
