@@ -195,7 +195,6 @@ bool IKController::IKSolver_Limb(int endJointID, const ATarget& target)
 		mIKSkeleton.getJointByID(mRootID)->setLocalTranslation(desiredRootPosition);
 		mIKSkeleton.update();
 		computeLimbIK(mLhandTarget, mLhandIKchain, -axisY, &mIKSkeleton);
-		//computeLimbIK(mLhandTarget, mLhandIKchain, axisY, &mIKSkeleton);
 		computeLimbIK(mRhandTarget, mRhandIKchain, axisY, &mIKSkeleton);
 		computeLimbIK(mLfootTarget, mLfootIKchain, axisX, &mIKSkeleton);
 		computeLimbIK(mRfootTarget, mRfootIKchain, axisX, &mIKSkeleton);
