@@ -139,14 +139,14 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 	// 1.	Update the local translation of the root based on the left height and the right height
 	AJoint* root = m_pSkeleton->getRootNode();
 	vec3 pos = root->getLocalTranslation();
-	pos[1] += (leftHeight + rightHeight) / 2.0;
+	//pos[1] += (leftHeight + rightHeight) / 2.0;
 
-	/*if (leftHeight < rightHeight) {
+	if (leftHeight < rightHeight) {
 		pos[1] += leftHeight;
 	}
 	else {
 		pos[1] += rightHeight;
-	}*/
+	}
 
 	root->setLocalTranslation(pos);
 	//m_pSkeleton->update();
