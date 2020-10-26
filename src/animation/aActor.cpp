@@ -153,14 +153,6 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 	//convert height to local space
 	vec3 localLeft = leftFoot->getLocal2Global().Inverse() * vec3(0,leftHeight,0);	
 	vec3 localRight = rightFoot->getLocal2Global().Inverse() * vec3(0, rightHeight, 0);
-	/*if (leftPos[1] < localLeft[1]) {
-		leftPos[1] = localLeft[1];
-	}
-	if (rightPos[1] < localRight[1]) {
-		rightPos[1] = localRight[1];
-	}*/
-	
-	m_pSkeleton->update();
 
 	// 2.	Update the character with Limb-based IK 
 
@@ -177,16 +169,25 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 		leftNormal = leftFoot->getGlobalRotation().Transpose() * leftNormal;
 		rotLeft = leftFoot->getLocalRotation();
 		//rotLeft = leftNormal * rotLeft.Inverse().Transpose();
-		/*nx = leftNormal[0];
+		/*
+		//approach1
+		nx = leftNormal[0];
 		ny = leftNormal[1];
 		nz = leftNormal[2];
 		double dist = sqrt(nx * nx + ny * ny);
 		vec3 u1 = vec3(ny/ dist, -nx / dist, 0.0);
 		vec3 u2 = vec3(nx*nz / dist, ny*nz / dist, -dist);
 		vec3 u3 = vec3(nx ,ny, nz);
-		rotLeft = mat3(u1, u2, u3);*/
+		rotLeft = mat3(u1, u2, u3);
+
+		//approach2
 		double angle = Dot(leftNormal, rightFoot->getLocalTranslation());
 		rotLeft.FromAxisAngle(leftNormal, angle);
+		*/
+		vec3 up = vec3(0.0, 1.0, 0.0);
+		vec3 col1 = up.Cross(leftNormal);
+		mat3 rotLeft = mat3(col1, up, leftNormal).Transpose();
+		
 		leftFoot->setLocalRotation(rotLeft);
 	}
 	if (rotateRight)
@@ -195,7 +196,7 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 		rightNormal = rightFoot->getGlobalRotation().Transpose() * rightNormal;
 		rotRight = rightFoot->getLocalRotation();
 		//rotLeft = leftNormal * rotLeft.Inverse().Transpose();
-		nx = rightNormal[0];
+		/*nx = rightNormal[0];
 		ny = rightNormal[1];
 		nz = rightNormal[2];
 		double dist = sqrt(nx * nx + ny * ny);
@@ -203,24 +204,23 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 		vec3 u2 = vec3(nx * nz / dist, ny * nz / dist, -dist);
 		vec3 u3 = vec3(nx, ny, nz);
 		rotRight = mat3(u1, u2, u3);
+		*/
 		double angle = Dot(rightNormal, rightFoot->getLocalTranslation());
 		rotRight.FromAxisAngle(rightNormal, angle);
-		rightFoot->setLocalRotation(rotRight);
+		//rightFoot->setLocalRotation(rotRight);
 	}
 
 	ATarget tgtLeft = ATarget();
-	leftPos[1] = localLeft[1];
-	//tgtLeft.setLocalTranslation(leftPos);
+	tgtLeft.setLocalTranslation(localLeft);
 	tgtLeft.setLocalRotation(rotLeft);
 	AIKchain ikLeft = m_IKController->createIKchain(m_IKController->mLfootID, 3, m_pSkeleton);
-	//m_IKController->computeLimbIK(tgtLeft, ikLeft, axisX, m_pSkeleton);
+	m_IKController->computeLimbIK(tgtLeft, ikLeft, axisX, m_pSkeleton);
 
 	ATarget tgtRight = ATarget();
-	rightPos[1] = localRight[1];
-	//tgtRight.setLocalTranslation(rightPos);
+	tgtRight.setLocalTranslation(localLeft);
 	tgtRight.setLocalRotation(rotRight);
 	AIKchain ikRight = m_IKController->createIKchain(m_IKController->mRfootID, 3, m_pSkeleton);
-	//m_IKController->computeLimbIK(tgtRight, ikRight, axisX, m_pSkeleton);
+	m_IKController->computeLimbIK(tgtRight, ikRight, axisX, m_pSkeleton);
 
 
 	m_pSkeleton->update();
