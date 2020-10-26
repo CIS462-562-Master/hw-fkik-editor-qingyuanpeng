@@ -139,89 +139,53 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 	// 1.	Update the local translation of the root based on the left height and the right height
 	AJoint* root = m_pSkeleton->getRootNode();
 	vec3 pos = root->getLocalTranslation();
-	if (leftHeight > rightHeight) {
+	pos[1] += (leftHeight + rightHeight) / 2.0;
+
+	/*if (leftHeight < rightHeight) {
 		pos[1] += leftHeight;
 	}
 	else {
 		pos[1] += rightHeight;
-	}
-	root->setLocalTranslation(pos);
+	}*/
 
-	
-	vec3 leftPos = leftFoot->getLocalTranslation();
-	vec3 rightPos = rightFoot->getLocalTranslation();
-	//convert height to local space
-	vec3 localLeft = leftFoot->getLocal2Global().Inverse() * vec3(0,leftHeight,0);	
-	vec3 localRight = rightFoot->getLocal2Global().Inverse() * vec3(0, rightHeight, 0);
+	root->setLocalTranslation(pos);
+	//m_pSkeleton->update();
 
 	// 2.	Update the character with Limb-based IK 
 
-	
-	double nx, ny, nz;
-	vec3 u1, u2, u3;
-	mat3 rotLeft = IdentityMat3;
-	mat3 rotRight = IdentityMat3;
 	// Rotate Foot
 	if (rotateLeft)
 	{
-		// Update the local orientation of the left foot based on the left normal
-		//convert normal to local
-		leftNormal = leftFoot->getGlobalRotation().Transpose() * leftNormal;
-		rotLeft = leftFoot->getLocalRotation();
-		//rotLeft = leftNormal * rotLeft.Inverse().Transpose();
-		/*
-		//approach1
-		nx = leftNormal[0];
-		ny = leftNormal[1];
-		nz = leftNormal[2];
-		double dist = sqrt(nx * nx + ny * ny);
-		vec3 u1 = vec3(ny/ dist, -nx / dist, 0.0);
-		vec3 u2 = vec3(nx*nz / dist, ny*nz / dist, -dist);
-		vec3 u3 = vec3(nx ,ny, nz);
-		rotLeft = mat3(u1, u2, u3);
+		// Update the local orientation of the left foot based on the left normal		
+		ATarget tgtLeft = ATarget();
 
-		//approach2
-		double angle = Dot(leftNormal, rightFoot->getLocalTranslation());
-		rotLeft.FromAxisAngle(leftNormal, angle);
-		*/
-		vec3 up = vec3(0.0, 1.0, 0.0);
-		vec3 col1 = up.Cross(leftNormal);
-		mat3 rotLeft = mat3(col1, up, leftNormal).Transpose();
-		
-		leftFoot->setLocalRotation(rotLeft);
+		vec3 leftPos = leftFoot->getGlobalTranslation() + leftHeight;
+		tgtLeft.setLocalTranslation(leftPos);
+
+		m_pSkeleton->update();
+
+		m_IKController->IKSolver_Limb(m_IKController->mLfootID, tgtLeft);
 	}
 	if (rotateRight)
 	{
-		// Update the local orientation of the right foot based on the right normal
-		rightNormal = rightFoot->getGlobalRotation().Transpose() * rightNormal;
-		rotRight = rightFoot->getLocalRotation();
-		//rotLeft = leftNormal * rotLeft.Inverse().Transpose();
-		/*nx = rightNormal[0];
-		ny = rightNormal[1];
-		nz = rightNormal[2];
-		double dist = sqrt(nx * nx + ny * ny);
-		vec3 u1 = vec3(ny / dist, -nx / dist, 0.0);
-		vec3 u2 = vec3(nx * nz / dist, ny * nz / dist, -dist);
-		vec3 u3 = vec3(nx, ny, nz);
-		rotRight = mat3(u1, u2, u3);
-		*/
-		double angle = Dot(rightNormal, rightFoot->getLocalTranslation());
-		rotRight.FromAxisAngle(rightNormal, angle);
-		//rightFoot->setLocalRotation(rotRight);
+		ATarget tgtRight = ATarget();
+
+		vec3 rightPos = rightFoot->getGlobalTranslation() + rightHeight;
+		tgtRight.setLocalTranslation(rightPos);
+
+		m_pSkeleton->update();
+		m_IKController->IKSolver_Limb(m_IKController->mRfootID, tgtRight);
 	}
 
-	ATarget tgtLeft = ATarget();
-	tgtLeft.setLocalTranslation(localLeft);
-	tgtLeft.setLocalRotation(rotLeft);
-	AIKchain ikLeft = m_IKController->createIKchain(m_IKController->mLfootID, 3, m_pSkeleton);
-	m_IKController->computeLimbIK(tgtLeft, ikLeft, axisX, m_pSkeleton);
+	vec3 col1 = leftFoot->getLocalRotation()[0];
+	vec3 col3 = leftNormal.Cross(col1);
+	mat3 rotLeft = mat3(col1.Normalize(), leftNormal, col3).Transpose();
+	leftFoot->setLocalRotation(rotLeft);
 
-	ATarget tgtRight = ATarget();
-	tgtRight.setLocalTranslation(localLeft);
-	tgtRight.setLocalRotation(rotRight);
-	AIKchain ikRight = m_IKController->createIKchain(m_IKController->mRfootID, 3, m_pSkeleton);
-	m_IKController->computeLimbIK(tgtRight, ikRight, axisX, m_pSkeleton);
-
+	col1 = rightFoot->getLocalRotation()[0];
+	col3 = rightNormal.Cross(col1);
+	mat3 rotRight = mat3(col1.Normalize(), rightNormal, col3).Transpose();
+	rightFoot->setLocalRotation(rotRight);
 
 	m_pSkeleton->update();
 }
