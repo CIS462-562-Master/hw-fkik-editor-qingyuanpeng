@@ -149,7 +149,7 @@ void AActor::solveFootIK(float leftHeight, float rightHeight, bool rotateLeft, b
 	}
 
 	root->setLocalTranslation(pos);
-	//m_pSkeleton->update();
+	m_pSkeleton->update();
 
 	// 2.	Update the character with Limb-based IK 
 
